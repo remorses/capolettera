@@ -54,7 +54,7 @@ class Vector implements Point {
 // Configuration
 const CONFIG = {
   padding: 60,
-  lineHeight: 1.3,
+  lineHeight: 1.15,
   fontSize: 16,
   paperColor: 0xf5f0e6,
   inkColor: '#1a1410',
