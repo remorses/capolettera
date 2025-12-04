@@ -61,7 +61,7 @@ const CONFIG = {
   width: 800,
   height: 900,
   // Illuminated initial square
-  initialSquareSize: 170,
+  initialSquareSize: 200,
   initialSquareMargin: 12,
   initialSquareColor: 0x1a1410,
 };
@@ -529,7 +529,6 @@ async function init() {
   // Get UI elements
   const codeInput = document.getElementById('code-input') as HTMLTextAreaElement;
   const textureSelect = document.getElementById('texture-select') as HTMLSelectElement;
-  const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
 
   // Set default code
   codeInput.value = DEFAULT_CODE;
@@ -547,13 +546,6 @@ async function init() {
       await renderImage(code, textureIndex);
     }, 300);
   };
-
-  // Handle generate button click
-  generateBtn.addEventListener('click', async () => {
-    const code = codeInput.value || DEFAULT_CODE;
-    const textureIndex = parseInt(textureSelect.value);
-    await renderImage(code, textureIndex);
-  });
 
   // Auto-generate on texture change
   textureSelect.addEventListener('change', async () => {
