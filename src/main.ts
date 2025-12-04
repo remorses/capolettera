@@ -1,7 +1,20 @@
-import { Application, Container, Graphics, Text, TextStyle, Filter, GlProgram, RenderTexture, Sprite, Texture } from 'pixi.js';
+import { Application, Container, Assets, Graphics, Text, TextStyle, Filter, GlProgram, RenderTexture, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
 
-// Hard-coded sample code to render
-const SAMPLE_CODE = `function fibonacci(n: number): number {
+// Import illuminated initial textures (0-8)
+const textureUrls = [
+  new URL('../textures/0.png', import.meta.url).href,
+  new URL('../textures/1.png', import.meta.url).href,
+  new URL('../textures/2.png', import.meta.url).href,
+  new URL('../textures/3.png', import.meta.url).href,
+  new URL('../textures/4.png', import.meta.url).href,
+  new URL('../textures/5.png', import.meta.url).href,
+  new URL('../textures/6.png', import.meta.url).href,
+  new URL('../textures/7.png', import.meta.url).href,
+  new URL('../textures/8.png', import.meta.url).href,
+];
+
+// Default sample code
+const DEFAULT_CODE = `function fibonacci(n: number): number {
   if (n <= 1) return n;
   return fibonacci(n - 1) + fibonacci(n - 2);
 }
@@ -48,7 +61,7 @@ const CONFIG = {
   width: 800,
   height: 900,
   // Illuminated initial square
-  initialSquareSize: 160,
+  initialSquareSize: 170,
   initialSquareMargin: 12,
   initialSquareColor: 0x1a1410,
 };
@@ -115,25 +128,25 @@ float fbm(vec2 p) {
 void main() {
   vec2 uv = vTextureCoord;
   vec2 pixelSize = 1.0 / uResolution;
-  
+
   // Very subtle paper fiber distortion (reduced from original)
   float distortionNoise = fbm(uv * 20.0 + uTime * 0.01) * uDistortion;
   vec2 distortedUV = uv + vec2(distortionNoise * 0.5, distortionNoise * 0.3) * pixelSize;
-  
+
   // Get the original text color
   vec4 textColor = texture(uTexture, distortedUV);
-  
+
   // Get paper texture
   vec4 paper = texture(uPaperTexture, uv);
-  
+
   // Calculate how much ink is present (darker = more ink)
   // The text is dark on light background, so we use luminance
   float textLuminance = dot(textColor.rgb, vec3(0.299, 0.587, 0.114));
   float paperLuminance = dot(paper.rgb, vec3(0.299, 0.587, 0.114));
-  
+
   // Ink coverage: where text is darker than paper
   float inkCoverage = 1.0 - smoothstep(0.0, paperLuminance, textLuminance);
-  
+
   // Very subtle ink bleed - sample neighboring pixels for slight spread
   float bleedAmount = 0.0;
   for (float dx = -1.0; dx <= 1.0; dx += 1.0) {
@@ -146,28 +159,28 @@ void main() {
     }
   }
   inkCoverage = min(1.0, inkCoverage + bleedAmount);
-  
+
   // Add very subtle noise to ink edges (paper fiber absorption)
   float edgeNoise = snoise(uv * 300.0) * uNoiseStrength;
   float fiberNoise = fbm(uv * 150.0) * 0.02;
-  
+
   // Only apply noise at ink edges
   float edgeMask = smoothstep(0.0, 0.3, inkCoverage) * smoothstep(1.0, 0.7, inkCoverage);
   inkCoverage += (edgeNoise + fiberNoise) * edgeMask;
   inkCoverage = clamp(inkCoverage, 0.0, 1.0);
-  
+
   // Ink color - dark brownish black with subtle variation
   vec3 inkColor = vec3(0.08, 0.06, 0.05);
   inkColor += vec3(snoise(uv * 50.0)) * 0.015;
-  
+
   // Blend ink with paper
   vec3 result = mix(paper.rgb, inkColor, inkCoverage);
-  
+
   // Very subtle vignette
   vec2 vignetteUV = uv * 2.0 - 1.0;
   float vignette = 1.0 - dot(vignetteUV, vignetteUV) * 0.08;
   result *= vignette;
-  
+
   finalColor = vec4(result, 1.0);
 }
 `;
@@ -253,43 +266,43 @@ float fbm(vec2 p, float seed) {
 
 void main() {
   vec2 uv = vTextureCoord;
-  
+
   // Base paper color (warm off-white)
   vec3 paperBase = vec3(0.96, 0.94, 0.90);
-  
+
   // Large scale color variation
   float largeNoise = fbm(uv * 2.0, uSeed) * 0.03;
-  
+
   // Medium fiber texture
   float mediumFiber = fbm(uv * 15.0, uSeed + 100.0) * 0.025;
-  
+
   // Fine grain texture
   float fineGrain = snoise(uv * 200.0 + uSeed) * 0.015;
-  
+
   // Paper fiber direction (slight horizontal bias like real paper)
   float fiberDirection = fbm(vec2(uv.x * 30.0, uv.y * 10.0), uSeed + 200.0) * 0.02;
-  
+
   // Combine all noise layers
   float totalNoise = largeNoise + mediumFiber + fineGrain + fiberDirection;
-  
+
   // Add subtle warm/cool variation
   vec3 warmTint = vec3(1.0, 0.98, 0.95);
   vec3 coolTint = vec3(0.97, 0.98, 1.0);
   float tintMix = fbm(uv * 5.0, uSeed + 300.0) * 0.5 + 0.5;
   vec3 tint = mix(warmTint, coolTint, tintMix);
-  
+
   // Apply noise and tint to paper
   vec3 paperColor = paperBase * tint + vec3(totalNoise);
-  
+
   // Add occasional darker specks (paper impurities)
   float specks = step(0.98, snoise(uv * 500.0 + uSeed));
   paperColor -= specks * 0.1;
-  
+
   // Subtle edge darkening (aging effect)
   vec2 edgeDist = abs(uv - 0.5) * 2.0;
   float edgeDarken = pow(max(edgeDist.x, edgeDist.y), 4.0) * 0.05;
   paperColor -= edgeDarken;
-  
+
   finalColor = vec4(paperColor, 1.0);
 }
 `;
@@ -345,58 +358,39 @@ class PaperTextureFilter extends Filter {
 }
 
 async function createPaperTexture(app: Application): Promise<Texture> {
-  // Create a container for the paper texture
   const paperContainer = new Container();
-  
-  // Create a background rectangle
   const bg = new Graphics();
   bg.rect(0, 0, CONFIG.width, CONFIG.height);
   bg.fill(CONFIG.paperColor);
   paperContainer.addChild(bg);
-  
-  // Apply paper texture filter
+
   const paperFilter = new PaperTextureFilter();
   paperContainer.filters = [paperFilter];
-  
-  // Render to texture
+
   const renderTexture = RenderTexture.create({
     width: CONFIG.width,
     height: CONFIG.height,
   });
-  
+
   app.renderer.render({
     container: paperContainer,
     target: renderTexture,
   });
-  
+
   return renderTexture;
 }
 
-async function init() {
-  // Create the PixiJS application
-  const app = new Application();
-  
-  await app.init({
-    width: CONFIG.width,
-    height: CONFIG.height,
-    backgroundColor: CONFIG.paperColor,
-    antialias: true,
-    resolution: 2,
-    autoDensity: true,
-  });
+// Global state
+let app: Application;
+let paperTexture: Texture;
+let inkFilter: InkBleedFilter;
 
-  // Add canvas to the DOM
-  const appElement = document.getElementById('app');
-  if (appElement) {
-    appElement.appendChild(app.canvas);
-  }
-
-  // Generate paper texture first
-  const paperTexture = await createPaperTexture(app);
+async function renderImage(code: string, textureIndex: number) {
+  // Clear stage
+  app.stage.removeChildren();
 
   // Create main container
   const mainContainer = new Container();
-  app.stage.addChild(mainContainer);
 
   // Add paper background sprite
   const paperBg = new Sprite(paperTexture);
@@ -408,20 +402,42 @@ async function init() {
   textContainer.y = CONFIG.padding;
   mainContainer.addChild(textContainer);
 
-  // Add illuminated initial square
-  const initialSquare = new Graphics();
-  initialSquare.rect(0, 0, CONFIG.initialSquareSize, CONFIG.initialSquareSize);
-  initialSquare.fill(CONFIG.initialSquareColor);
-  textContainer.addChild(initialSquare);
+  // Add illuminated initial image
+  const illuminatedTexture = await Assets.load(textureUrls[textureIndex]);
+
+  // First render the image with brightness filter to a texture
+  const tempSprite = new Sprite(illuminatedTexture);
+  tempSprite.width = CONFIG.initialSquareSize;
+  tempSprite.height = CONFIG.initialSquareSize;
+
+  // Apply brightness/contrast filter to push gray to white
+  const colorFilter = new ColorMatrixFilter();
+  colorFilter.brightness(1.7, true);
+  tempSprite.filters = [colorFilter];
+
+  // Render to texture
+  const brightenedTexture = RenderTexture.create({
+    width: CONFIG.initialSquareSize,
+    height: CONFIG.initialSquareSize,
+  });
+  app.renderer.render({
+    container: tempSprite,
+    target: brightenedTexture,
+  });
+
+  // Now create the final sprite with multiply blend mode
+  const initialImage = new Sprite(brightenedTexture);
+  initialImage.x = -10;
+  initialImage.y = -10;
+  initialImage.blendMode = 'multiply';
+  textContainer.addChild(initialImage);
 
   // Calculate how many lines the square spans
   const lineHeightPx = CONFIG.fontSize * CONFIG.lineHeight;
   const squareTotalWidth = CONFIG.initialSquareSize + CONFIG.initialSquareMargin;
-  const squareTotalHeight = CONFIG.initialSquareSize + CONFIG.initialSquareMargin;
-  const linesWrappedAroundSquare = Math.ceil(squareTotalHeight / lineHeightPx);
+  const linesWrappedAroundSquare = Math.ceil(CONFIG.initialSquareSize / lineHeightPx);
 
-  // Define text style using a serif monospace font
-  // We'll use a web-safe fallback with Courier as it's serif-ish monospace
+  // Define text style
   const textStyle = new TextStyle({
     fontFamily: '"Courier Prime", "Courier New", Courier, monospace',
     fontSize: CONFIG.fontSize,
@@ -431,32 +447,22 @@ async function init() {
     fontWeight: '400',
   });
 
-  // Load a proper serif monospace font
-  const fontLink = document.createElement('link');
-  fontLink.href = 'https://fonts.googleapis.com/css2?family=Courier+Prime&display=swap';
-  fontLink.rel = 'stylesheet';
-  document.head.appendChild(fontLink);
-
-  // Wait for font to load
-  await document.fonts.ready;
-
   // Create text lines with wrapping around the initial square
-  const lines = SAMPLE_CODE.split('\n');
+  const lines = code.split('\n');
   let yOffset = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const text = new Text({
-      text: line || ' ', // Use space for empty lines to maintain spacing
+      text: line || ' ',
       style: textStyle,
     });
     text.y = yOffset;
-    
-    // Offset lines that are beside the illuminated initial square
+
     if (i < linesWrappedAroundSquare) {
       text.x = squareTotalWidth;
     }
-    
+
     textContainer.addChild(text);
     yOffset += lineHeightPx;
   }
@@ -475,24 +481,91 @@ async function init() {
 
   // Create final sprite with ink bleed filter
   const finalSprite = new Sprite(textRenderTexture);
-  
-  // Apply the ink bleed filter
-  const inkFilter = new InkBleedFilter(paperTexture);
   finalSprite.filters = [inkFilter];
 
-  // Clear stage and add final sprite
-  app.stage.removeChildren();
+  // Add to stage
   app.stage.addChild(finalSprite);
+}
 
-  // Optional: Animate the effect slightly over time
+async function init() {
+  // Create the PixiJS application
+  app = new Application();
+
+  await app.init({
+    width: CONFIG.width,
+    height: CONFIG.height,
+    backgroundColor: CONFIG.paperColor,
+    antialias: true,
+    resolution: 2,
+    autoDensity: true,
+  });
+
+  // Add canvas to the DOM
+  const canvasContainer = document.getElementById('canvas-container');
+  if (canvasContainer) {
+    canvasContainer.appendChild(app.canvas);
+  }
+
+  // Load font
+  const fontLink = document.createElement('link');
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=Courier+Prime&display=swap';
+  fontLink.rel = 'stylesheet';
+  document.head.appendChild(fontLink);
+  await document.fonts.ready;
+
+  // Generate paper texture
+  paperTexture = await createPaperTexture(app);
+
+  // Create ink filter
+  inkFilter = new InkBleedFilter(paperTexture);
+
+  // Animate ink effect
   let time = 0;
   app.ticker.add((ticker) => {
     time += ticker.deltaTime * 0.01;
     inkFilter.time = time;
   });
 
-  // Log success
-  console.log('Code image generator initialized successfully!');
+  // Get UI elements
+  const codeInput = document.getElementById('code-input') as HTMLTextAreaElement;
+  const textureSelect = document.getElementById('texture-select') as HTMLSelectElement;
+  const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
+
+  // Set default code
+  codeInput.value = DEFAULT_CODE;
+
+  // Initial render
+  await renderImage(DEFAULT_CODE, parseInt(textureSelect.value));
+
+  // Debounce helper
+  let debounceTimer: number;
+  const debounceRender = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(async () => {
+      const code = codeInput.value || DEFAULT_CODE;
+      const textureIndex = parseInt(textureSelect.value);
+      await renderImage(code, textureIndex);
+    }, 300);
+  };
+
+  // Handle generate button click
+  generateBtn.addEventListener('click', async () => {
+    const code = codeInput.value || DEFAULT_CODE;
+    const textureIndex = parseInt(textureSelect.value);
+    await renderImage(code, textureIndex);
+  });
+
+  // Auto-generate on texture change
+  textureSelect.addEventListener('change', async () => {
+    const code = codeInput.value || DEFAULT_CODE;
+    const textureIndex = parseInt(textureSelect.value);
+    await renderImage(code, textureIndex);
+  });
+
+  // Auto-generate on code input change (debounced)
+  codeInput.addEventListener('input', debounceRender);
+
+  console.log('Capolettera initialized successfully!');
 }
 
 // Start the application

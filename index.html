@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Code Image Generator</title>
+  <title>Capolettera - Code Image Generator</title>
   <style>
     * {
       margin: 0;
@@ -15,23 +15,123 @@
       height: 100%;
       overflow: hidden;
       background: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     #app {
       width: 100%;
       height: 100%;
       display: flex;
+    }
+    #controls {
+      width: 350px;
+      min-width: 350px;
+      height: 100%;
+      background: #2a2a2a;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    #controls h1 {
+      color: #f5f0e6;
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    #controls label {
+      color: #aaa;
+      font-size: 13px;
+      display: block;
+      margin-bottom: 6px;
+    }
+    #controls textarea {
+      width: 100%;
+      flex: 1;
+      min-height: 300px;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #f5f0e6;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 12px;
+      resize: none;
+    }
+    #controls textarea:focus {
+      outline: none;
+      border-color: #666;
+    }
+    #controls select {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #f5f0e6;
+      font-size: 14px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    #controls select:focus {
+      outline: none;
+      border-color: #666;
+    }
+    #controls button {
+      width: 100%;
+      background: #f5f0e6;
+      border: none;
+      border-radius: 6px;
+      color: #1a1a1a;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #controls button:hover {
+      background: #e5e0d6;
+    }
+    #canvas-container {
+      flex: 1;
+      display: flex;
       align-items: center;
       justify-content: center;
+      padding: 20px;
+      overflow: hidden;
     }
-    canvas {
+    #canvas-container canvas {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <div id="controls">
+      <h1>Capolettera</h1>
+      <div>
+        <label for="texture-select">Illuminated Initial</label>
+        <select id="texture-select">
+          <option value="0">Texture 0</option>
+          <option value="1" selected>Texture 1</option>
+          <option value="2">Texture 2</option>
+          <option value="3">Texture 3</option>
+          <option value="4">Texture 4</option>
+          <option value="5">Texture 5</option>
+          <option value="6">Texture 6</option>
+          <option value="7">Texture 7</option>
+          <option value="8">Texture 8</option>
+        </select>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <label for="code-input">Code</label>
+        <textarea id="code-input" placeholder="Enter your code here..."></textarea>
+      </div>
+      <button id="generate-btn">Generate Image</button>
+    </div>
+    <div id="canvas-container"></div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
