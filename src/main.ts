@@ -1,4 +1,40 @@
 import { Application, Container, Assets, Graphics, Text, TextStyle, Filter, GlProgram, RenderTexture, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
+import * as prettier from 'prettier';
+import prettierPluginEstree from 'prettier/plugins/estree';
+import prettierPluginTypescript from 'prettier/plugins/typescript';
+import prettierPluginBabel from 'prettier/plugins/babel';
+import prettierPluginHtml from 'prettier/plugins/html';
+import prettierPluginCss from 'prettier/plugins/postcss';
+import prettierPluginMarkdown from 'prettier/plugins/markdown';
+import prettierPluginYaml from 'prettier/plugins/yaml';
+
+// Format code with prettier
+async function formatCode(code: string, language: string): Promise<string> {
+  try {
+    const plugins = [prettierPluginEstree, prettierPluginTypescript, prettierPluginBabel, prettierPluginHtml, prettierPluginCss, prettierPluginMarkdown, prettierPluginYaml];
+    const parserMap: Record<string, string> = {
+      typescript: 'typescript',
+      javascript: 'babel',
+      json: 'json',
+      html: 'html',
+      css: 'css',
+      markdown: 'markdown',
+      yaml: 'yaml',
+    };
+    const formatted = await prettier.format(code, {
+      parser: parserMap[language] || 'typescript',
+      plugins,
+      printWidth: 60,
+      tabWidth: 2,
+      semi: true,
+      singleQuote: true,
+    });
+    return formatted.trim();
+  } catch (e) {
+    console.error('Format error:', e);
+    return code;
+  }
+}
 
 // Import illuminated initial textures (0-8)
 const textureUrls = [
@@ -59,12 +95,19 @@ const CONFIG = {
   paperColor: 0xf5f0e6,
   inkColor: '#1a1410',
   width: 800,
-  height: 900,
   // Illuminated initial square
   initialSquareSize: 200,
   initialSquareMargin: 12,
   initialSquareColor: 0x1a1410,
 };
+
+// Calculate height based on code content
+function calculateHeight(code: string): number {
+  const lines = code.split('\n');
+  const lineHeightPx = CONFIG.fontSize * CONFIG.lineHeight;
+  const textHeight = lines.length * lineHeightPx;
+  return Math.max(CONFIG.initialSquareSize + CONFIG.padding * 2, textHeight + CONFIG.padding * 2);
+}
 
 // Ink bleed and paper distortion shader
 const inkBleedFragment = `
@@ -308,7 +351,7 @@ void main() {
 `;
 
 class InkBleedFilter extends Filter {
-  constructor(paperTexture: Texture) {
+  constructor(paperTexture: Texture, height: number) {
     const glProgram = GlProgram.from({
       vertex: defaultVertex,
       fragment: inkBleedFragment,
@@ -319,7 +362,7 @@ class InkBleedFilter extends Filter {
       resources: {
         inkBleedUniforms: {
           uTime: { value: 0, type: 'f32' },
-          uResolution: { value: [CONFIG.width, CONFIG.height], type: 'vec2<f32>' },
+          uResolution: { value: [CONFIG.width, height], type: 'vec2<f32>' },
           uInkBleed: { value: 0.5, type: 'f32' },
           uNoiseStrength: { value: 0.02, type: 'f32' },
           uDistortion: { value: 0.15, type: 'f32' },
@@ -339,7 +382,7 @@ class InkBleedFilter extends Filter {
 }
 
 class PaperTextureFilter extends Filter {
-  constructor() {
+  constructor(height: number) {
     const glProgram = GlProgram.from({
       vertex: defaultVertex,
       fragment: paperTextureFragment,
@@ -349,7 +392,7 @@ class PaperTextureFilter extends Filter {
       glProgram,
       resources: {
         paperUniforms: {
-          uResolution: { value: [CONFIG.width, CONFIG.height], type: 'vec2<f32>' },
+          uResolution: { value: [CONFIG.width, height], type: 'vec2<f32>' },
           uSeed: { value: Math.random() * 1000, type: 'f32' },
         },
       },
@@ -357,19 +400,19 @@ class PaperTextureFilter extends Filter {
   }
 }
 
-async function createPaperTexture(app: Application): Promise<Texture> {
+async function createPaperTexture(app: Application, height: number): Promise<Texture> {
   const paperContainer = new Container();
   const bg = new Graphics();
-  bg.rect(0, 0, CONFIG.width, CONFIG.height);
+  bg.rect(0, 0, CONFIG.width, height);
   bg.fill(CONFIG.paperColor);
   paperContainer.addChild(bg);
 
-  const paperFilter = new PaperTextureFilter();
+  const paperFilter = new PaperTextureFilter(height);
   paperContainer.filters = [paperFilter];
 
   const renderTexture = RenderTexture.create({
     width: CONFIG.width,
-    height: CONFIG.height,
+    height: height,
   });
 
   app.renderer.render({
@@ -382,12 +425,23 @@ async function createPaperTexture(app: Application): Promise<Texture> {
 
 // Global state
 let app: Application;
-let paperTexture: Texture;
-let inkFilter: InkBleedFilter;
+let currentInkFilter: InkBleedFilter | null = null;
 
 async function renderImage(code: string, textureIndex: number) {
+  // Calculate dynamic height
+  const height = calculateHeight(code);
+  
+  // Resize app
+  app.renderer.resize(CONFIG.width, height);
+  
   // Clear stage
   app.stage.removeChildren();
+
+  // Create paper texture with new height
+  const paperTexture = await createPaperTexture(app, height);
+  
+  // Create ink filter with new height
+  currentInkFilter = new InkBleedFilter(paperTexture, height);
 
   // Create main container
   const mainContainer = new Container();
@@ -470,7 +524,7 @@ async function renderImage(code: string, textureIndex: number) {
   // Create a render texture for the text with paper
   const textRenderTexture = RenderTexture.create({
     width: CONFIG.width,
-    height: CONFIG.height,
+    height: height,
   });
 
   // Render the main container to texture
@@ -481,7 +535,7 @@ async function renderImage(code: string, textureIndex: number) {
 
   // Create final sprite with ink bleed filter
   const finalSprite = new Sprite(textRenderTexture);
-  finalSprite.filters = [inkFilter];
+  finalSprite.filters = [currentInkFilter];
 
   // Add to stage
   app.stage.addChild(finalSprite);
@@ -491,9 +545,11 @@ async function init() {
   // Create the PixiJS application
   app = new Application();
 
+  const initialHeight = calculateHeight(DEFAULT_CODE);
+  
   await app.init({
     width: CONFIG.width,
-    height: CONFIG.height,
+    height: initialHeight,
     backgroundColor: CONFIG.paperColor,
     antialias: true,
     resolution: 2,
@@ -513,28 +569,35 @@ async function init() {
   document.head.appendChild(fontLink);
   await document.fonts.ready;
 
-  // Generate paper texture
-  paperTexture = await createPaperTexture(app);
-
-  // Create ink filter
-  inkFilter = new InkBleedFilter(paperTexture);
-
   // Animate ink effect
   let time = 0;
   app.ticker.add((ticker) => {
     time += ticker.deltaTime * 0.01;
-    inkFilter.time = time;
+    if (currentInkFilter) {
+      currentInkFilter.time = time;
+    }
   });
 
   // Get UI elements
   const codeInput = document.getElementById('code-input') as HTMLTextAreaElement;
   const textureSelect = document.getElementById('texture-select') as HTMLSelectElement;
+  const languageSelect = document.getElementById('language-select') as HTMLSelectElement;
+  const formatBtn = document.getElementById('format-btn') as HTMLButtonElement;
 
   // Set default code
   codeInput.value = DEFAULT_CODE;
 
   // Initial render
   await renderImage(DEFAULT_CODE, parseInt(textureSelect.value));
+  
+  // Format button handler
+  formatBtn.addEventListener('click', async () => {
+    const code = codeInput.value || DEFAULT_CODE;
+    const language = languageSelect.value;
+    const formatted = await formatCode(code, language);
+    codeInput.value = formatted;
+    await renderImage(formatted, parseInt(textureSelect.value));
+  });
 
   // Debounce helper
   let debounceTimer: number;

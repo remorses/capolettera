@@ -8,7 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "pixi.js": "^8.6.6"
+    "@prettier/sync": "^0.6.1",
+    "pixi.js": "^8.6.6",
+    "prettier": "^3.7.4"
   },
   "devDependencies": {
     "typescript": "^5.7.2",
