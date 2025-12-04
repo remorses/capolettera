@@ -443,7 +443,7 @@ async function renderImage(code: string, textureIndex: number) {
     fontSize: CONFIG.fontSize,
     fill: CONFIG.inkColor,
     lineHeight: CONFIG.fontSize * CONFIG.lineHeight,
-    letterSpacing: 0.5,
+    letterSpacing: 0,
     fontWeight: '400',
   });
 
