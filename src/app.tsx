@@ -48,55 +48,49 @@ interface CapoletteraSceneProps {
   height: number
 }
 
+interface SceneState {
+  textRenderTexture: RenderTexture
+  inkFilter: InkBleedFilter
+}
+
 function CapoletteraScene({ code, textureIndex, height }: CapoletteraSceneProps) {
   const { app } = useApplication()
-  const [paperTexture, setPaperTexture] = useState<RenderTexture | null>(null)
-  const [illuminatedTexture, setIlluminatedTexture] = useState<RenderTexture | null>(null)
-  const [textRenderTexture, setTextRenderTexture] = useState<RenderTexture | null>(null)
-  const [inkFilter, setInkFilter] = useState<InkBleedFilter | null>(null)
+  const [scene, setScene] = useState<SceneState | null>(null)
   const timeRef = useRef(0)
 
   useEffect(() => {
     if (!app) {
       return
     }
+    let cancelled = false
     createTextures(app, height, textureIndex).then(({ paper, illuminated }) => {
-      setPaperTexture(paper)
-      setIlluminatedTexture(illuminated)
+      if (cancelled) {
+        return
+      }
+      const inkFilter = new InkBleedFilter(paper, height)
+      const textRenderTexture = createTextTexture(app, code, paper, illuminated, height)
+      setScene({ textRenderTexture, inkFilter })
     })
-  }, [app, height, textureIndex])
-
-  useEffect(() => {
-    if (!paperTexture) {
-      return
+    return () => {
+      cancelled = true
     }
-    const filter = new InkBleedFilter(paperTexture, height)
-    setInkFilter(filter)
-  }, [paperTexture, height])
-
-  useEffect(() => {
-    if (!app || !paperTexture || !illuminatedTexture) {
-      return
-    }
-    const texture = createTextTexture(app, code, paperTexture, illuminatedTexture, height)
-    setTextRenderTexture(texture)
-  }, [app, code, paperTexture, illuminatedTexture, height])
+  }, [app, code, height, textureIndex])
 
   const tickCallback = useCallback(() => {
     timeRef.current += 0.01
-    if (inkFilter) {
-      inkFilter.time = timeRef.current
+    if (scene?.inkFilter) {
+      scene.inkFilter.time = timeRef.current
     }
-  }, [inkFilter])
+  }, [scene])
 
   useTick(tickCallback)
 
-  if (!textRenderTexture || !inkFilter) {
+  if (!scene) {
     return null
   }
 
   return (
-    <pixiSprite texture={textRenderTexture} filters={[inkFilter]} />
+    <pixiSprite texture={scene.textRenderTexture} filters={[scene.inkFilter]} />
   )
 }
 
