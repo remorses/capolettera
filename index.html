@@ -120,43 +120,7 @@
   </style>
 </head>
 <body>
-  <div id="app">
-    <div id="controls">
-      <h1>Capolettera</h1>
-      <div>
-        <label for="texture-select">Illuminated Initial</label>
-        <select id="texture-select">
-          <option value="0">O - Boatman</option>
-          <option value="1" selected>L - Falconer</option>
-          <option value="2">D - Knight</option>
-          <option value="3">A - Scribe</option>
-          <option value="4">C - Lute Player</option>
-          <option value="5">A - King</option>
-          <option value="6">O - Dragon</option>
-          <option value="7">A - Griffin</option>
-          <option value="8">W - Chimera</option>
-        </select>
-      </div>
-      <div>
-        <label for="language-select">Language (for formatting)</label>
-        <select id="language-select">
-          <option value="typescript" selected>TypeScript</option>
-          <option value="javascript">JavaScript</option>
-          <option value="json">JSON</option>
-          <option value="html">HTML</option>
-          <option value="css">CSS</option>
-          <option value="markdown">Markdown</option>
-          <option value="yaml">YAML</option>
-        </select>
-      </div>
-      <button id="format-btn">Format Code</button>
-      <div style="flex: 1; display: flex; flex-direction: column;">
-        <label for="code-input">Code</label>
-        <textarea id="code-input" placeholder="Enter your code here..."></textarea>
-      </div>
-    </div>
-    <div id="canvas-container"></div>
-  </div>
+  <div id="app"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
