@@ -362,12 +362,6 @@ class FancyMaterial extends MeshPhongMaterial {
 </Container>
 ```
 
-### When NOT to Use uikit
-
-- Full-screen post-processing effects
-- Custom fragment shaders that need precise UV control
-- Simple 2D rendering without flexbox needs
-- When you need predictable pixel-perfect rendering
 
 ## Project Structure Recommendation
 

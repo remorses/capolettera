@@ -8,18 +8,17 @@ import prettierPluginCss from 'prettier/plugins/postcss'
 import prettierPluginMarkdown from 'prettier/plugins/markdown'
 import prettierPluginYaml from 'prettier/plugins/yaml'
 import { CONFIG, DEFAULT_CODE, textureUrls, calculateHeight } from './lib/config'
-import { inkBleedVertexShader, inkBleedFragmentShader } from './lib/three-shaders'
+import { createInkBleedMaterial } from './lib/tsl-shaders'
 import {
-  WebGLRenderer,
   Scene,
   OrthographicCamera,
   PlaneGeometry,
   Mesh,
-  ShaderMaterial,
   CanvasTexture,
   LinearFilter,
-  Vector2,
-} from 'three'
+  MeshBasicNodeMaterial,
+  WebGPURenderer,
+} from 'three/webgpu'
 
 async function formatCode(code: string, language: string): Promise<string> {
   try {
@@ -126,12 +125,14 @@ function createPaperCanvas(width: number, height: number): HTMLCanvasElement {
 }
 
 interface ThreeSceneState {
-  renderer: WebGLRenderer
+  renderer: WebGPURenderer
   scene: Scene
   camera: OrthographicCamera
-  material: ShaderMaterial
+  material: MeshBasicNodeMaterial
   mesh: Mesh
-  animationId: number
+  textTexture: CanvasTexture
+  paperTexture: CanvasTexture
+  inkBleedMaterial: ReturnType<typeof createInkBleedMaterial>
 }
 
 function CapoletteraCanvas({ code, textureIndex }: { code: string; textureIndex: number }) {
@@ -155,7 +156,7 @@ function CapoletteraCanvas({ code, textureIndex }: { code: string; textureIndex:
       return
     }
 
-    const renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+    const renderer = new WebGPURenderer({ antialias: true })
     renderer.setSize(CONFIG.width, height)
     renderer.setPixelRatio(1)
     containerRef.current.appendChild(renderer.domElement)
@@ -175,40 +176,41 @@ function CapoletteraCanvas({ code, textureIndex }: { code: string; textureIndex:
     paperTexture.minFilter = LinearFilter
     paperTexture.magFilter = LinearFilter
 
-    const material = new ShaderMaterial({
-      uniforms: {
-        uTexture: { value: textTexture },
-        uPaperTexture: { value: paperTexture },
-        uTime: { value: 0 },
-        uResolution: { value: new Vector2(CONFIG.width, height) },
-        uInkBleed: { value: 0.5 },
-        uNoiseStrength: { value: 0.02 },
-        uDistortion: { value: 0.15 },
-      },
-      vertexShader: inkBleedVertexShader,
-      fragmentShader: inkBleedFragmentShader,
+    const inkBleedMaterial = createInkBleedMaterial({
+      textTexture,
+      paperTexture,
+      width: CONFIG.width,
+      height,
     })
+
+    const material = new MeshBasicNodeMaterial()
+    material.colorNode = inkBleedMaterial.outputNode
 
     const geometry = new PlaneGeometry(2, 2)
     const mesh = new Mesh(geometry, material)
     scene.add(mesh)
 
     let time = 0
-    let animationId = 0
 
-    function animate() {
-      animationId = requestAnimationFrame(animate)
+    renderer.setAnimationLoop(() => {
       time += 0.01
-      material.uniforms.uTime.value = time
+      inkBleedMaterial.uniforms.uTime.value = time
       renderer.render(scene, camera)
+    })
+
+    stateRef.current = {
+      renderer,
+      scene,
+      camera,
+      material,
+      mesh,
+      textTexture,
+      paperTexture,
+      inkBleedMaterial,
     }
 
-    animate()
-
-    stateRef.current = { renderer, scene, camera, material, mesh, animationId }
-
     return () => {
-      cancelAnimationFrame(animationId)
+      renderer.setAnimationLoop(null)
       renderer.dispose()
       geometry.dispose()
       material.dispose()
@@ -227,15 +229,16 @@ function CapoletteraCanvas({ code, textureIndex }: { code: string; textureIndex:
     }
 
     state.renderer.setSize(CONFIG.width, height)
-    state.material.uniforms.uResolution.value.set(CONFIG.width, height)
+    state.inkBleedMaterial.uniforms.uResolution.value.set(CONFIG.width, height)
 
     const textCanvas = createTextCanvas(code, CONFIG.width, height, illuminatedImage)
     const textTexture = new CanvasTexture(textCanvas)
     textTexture.minFilter = LinearFilter
     textTexture.magFilter = LinearFilter
 
-    state.material.uniforms.uTexture.value.dispose()
-    state.material.uniforms.uTexture.value = textTexture
+    state.textTexture.dispose()
+    state.textTexture = textTexture
+    state.inkBleedMaterial.updateTexture(textTexture)
   }, [code, height, illuminatedImage])
 
   return (
