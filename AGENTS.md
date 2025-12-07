@@ -1,3 +1,5 @@
+
+
 read this repo files to see how to use pixi react 
 
 https://github.com/pixijs/pixi-react
@@ -460,4 +462,3 @@ const jsonSchema = toJSONSchema(mySchema, {
   removeAdditionalStrategy: "strict",
 });
 ```
-
