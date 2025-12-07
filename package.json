@@ -10,13 +10,19 @@
   },
   "dependencies": {
     "@pixi/react": "^8.0.5",
+    "@pmndrs/uikit": "^1.0.60",
     "@prettier/sync": "^0.6.1",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.4.2",
+    "@react-three/uikit": "^1.0.60",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.181.0",
     "pixi.js": "^8.6.6",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react-dom": "^19.2.1",
+    "three": "^0.181.2"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

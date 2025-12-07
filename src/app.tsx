@@ -1,6 +1,3 @@
-import '@pixi/react'
-import { Application, extend, useApplication, useTick } from '@pixi/react'
-import { Container, Graphics, Text, TextStyle, Sprite, RenderTexture, ColorMatrixFilter, Assets, type Application as PixiApplication } from 'pixi.js'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import * as prettier from 'prettier'
 import prettierPluginEstree from 'prettier/plugins/estree'
@@ -11,13 +8,30 @@ import prettierPluginCss from 'prettier/plugins/postcss'
 import prettierPluginMarkdown from 'prettier/plugins/markdown'
 import prettierPluginYaml from 'prettier/plugins/yaml'
 import { CONFIG, DEFAULT_CODE, textureUrls, calculateHeight } from './lib/config'
-import { InkBleedFilter, PaperTextureFilter } from './lib/filters'
-
-extend({ Container, Graphics, Text, Sprite })
+import { inkBleedVertexShader, inkBleedFragmentShader } from './lib/three-shaders'
+import {
+  WebGLRenderer,
+  Scene,
+  OrthographicCamera,
+  PlaneGeometry,
+  Mesh,
+  ShaderMaterial,
+  CanvasTexture,
+  LinearFilter,
+  Vector2,
+} from 'three'
 
 async function formatCode(code: string, language: string): Promise<string> {
   try {
-    const plugins = [prettierPluginEstree, prettierPluginTypescript, prettierPluginBabel, prettierPluginHtml, prettierPluginCss, prettierPluginMarkdown, prettierPluginYaml]
+    const plugins = [
+      prettierPluginEstree,
+      prettierPluginTypescript,
+      prettierPluginBabel,
+      prettierPluginHtml,
+      prettierPluginCss,
+      prettierPluginMarkdown,
+      prettierPluginYaml,
+    ]
     const parserMap: Record<string, string> = {
       typescript: 'typescript',
       javascript: 'babel',
@@ -42,181 +56,197 @@ async function formatCode(code: string, language: string): Promise<string> {
   }
 }
 
-interface CapoletteraSceneProps {
-  code: string
-  textureIndex: number
-  height: number
-}
+function createTextCanvas(
+  code: string,
+  width: number,
+  height: number,
+  illuminatedImage: HTMLImageElement | null
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  const dpr = 2
+  canvas.width = width * dpr
+  canvas.height = height * dpr
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(dpr, dpr)
 
-interface SceneState {
-  textRenderTexture: RenderTexture
-  inkFilter: InkBleedFilter
-}
+  ctx.fillStyle = `rgb(${Math.round((CONFIG.paperColor >> 16) & 0xff)}, ${Math.round((CONFIG.paperColor >> 8) & 0xff)}, ${Math.round(CONFIG.paperColor & 0xff)})`
+  ctx.fillRect(0, 0, width, height)
 
-function CapoletteraScene({ code, textureIndex, height }: CapoletteraSceneProps) {
-  const { app } = useApplication()
-  const [scene, setScene] = useState<SceneState | null>(null)
-  const timeRef = useRef(0)
-
-  useEffect(() => {
-    if (!app) {
-      return
-    }
-    let cancelled = false
-    createTextures(app, height, textureIndex).then(({ paper, illuminated }) => {
-      if (cancelled) {
-        return
-      }
-      const inkFilter = new InkBleedFilter(paper, height)
-      const textRenderTexture = createTextTexture(app, code, paper, illuminated, height)
-      setScene({ textRenderTexture, inkFilter })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [app, code, height, textureIndex])
-
-  const tickCallback = useCallback(() => {
-    timeRef.current += 0.01
-    if (scene?.inkFilter) {
-      scene.inkFilter.time = timeRef.current
-    }
-  }, [scene])
-
-  useTick(tickCallback)
-
-  if (!scene) {
-    return null
+  if (illuminatedImage) {
+    ctx.globalCompositeOperation = 'multiply'
+    ctx.drawImage(
+      illuminatedImage,
+      CONFIG.padding - 10,
+      CONFIG.padding - 10,
+      CONFIG.initialSquareSize,
+      CONFIG.initialSquareSize
+    )
+    ctx.globalCompositeOperation = 'source-over'
   }
 
-  return (
-    <pixiSprite texture={scene.textRenderTexture} filters={[scene.inkFilter]} />
-  )
-}
+  ctx.font = `400 ${CONFIG.fontSize}px "Courier Prime", "Courier New", Courier, monospace`
+  ctx.fillStyle = CONFIG.inkColor
+  ctx.textBaseline = 'top'
 
-async function createTextures(app: PixiApplication, height: number, textureIndex: number) {
-  const paperContainer = new Container()
-  const bg = new Graphics()
-  bg.rect(0, 0, CONFIG.width, height)
-  bg.fill(CONFIG.paperColor)
-  paperContainer.addChild(bg)
-
-  const paperFilter = new PaperTextureFilter(height)
-  paperContainer.filters = [paperFilter]
-
-  const paperTexture = RenderTexture.create({
-    width: CONFIG.width,
-    height: height,
-  })
-
-  app.renderer.render({
-    container: paperContainer,
-    target: paperTexture,
-  })
-
-  const illuminatedBaseTexture = await Assets.load(textureUrls[textureIndex])
-  const tempSprite = new Sprite(illuminatedBaseTexture)
-  tempSprite.width = CONFIG.initialSquareSize
-  tempSprite.height = CONFIG.initialSquareSize
-
-  const colorFilter = new ColorMatrixFilter()
-  colorFilter.brightness(1.7, true)
-  tempSprite.filters = [colorFilter]
-
-  const illuminatedTexture = RenderTexture.create({
-    width: CONFIG.initialSquareSize,
-    height: CONFIG.initialSquareSize,
-  })
-
-  app.renderer.render({
-    container: tempSprite,
-    target: illuminatedTexture,
-  })
-
-  return { paper: paperTexture, illuminated: illuminatedTexture }
-}
-
-function createTextTexture(app: PixiApplication, code: string, paperTexture: RenderTexture, illuminatedTexture: RenderTexture, height: number) {
-  const mainContainer = new Container()
-
-  const paperBg = new Sprite(paperTexture)
-  mainContainer.addChild(paperBg)
-
-  const textContainer = new Container()
-  textContainer.x = CONFIG.padding
-  textContainer.y = CONFIG.padding
-  mainContainer.addChild(textContainer)
-
-  const initialImage = new Sprite(illuminatedTexture)
-  initialImage.x = -10
-  initialImage.y = -10
-  initialImage.blendMode = 'multiply'
-  textContainer.addChild(initialImage)
-
+  const lines = code.split('\n')
   const lineHeightPx = CONFIG.fontSize * CONFIG.lineHeight
   const squareTotalWidth = CONFIG.initialSquareSize + CONFIG.initialSquareMargin
   const linesWrappedAroundSquare = Math.ceil(CONFIG.initialSquareSize / lineHeightPx)
 
-  const textStyle = new TextStyle({
-    fontFamily: '"Courier Prime", "Courier New", Courier, monospace',
-    fontSize: CONFIG.fontSize,
-    fill: CONFIG.inkColor,
-    lineHeight: CONFIG.fontSize * CONFIG.lineHeight,
-    letterSpacing: 0,
-    fontWeight: '400',
+  lines.forEach((line, i) => {
+    const x = i < linesWrappedAroundSquare ? CONFIG.padding + squareTotalWidth : CONFIG.padding
+    const y = CONFIG.padding + i * lineHeightPx
+    ctx.fillText(line, x, y)
   })
 
-  const lines = code.split('\n')
-  let yOffset = 0
+  return canvas
+}
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const text = new Text({
-      text: line || ' ',
-      style: textStyle,
-    })
-    text.y = yOffset
+function createPaperCanvas(width: number, height: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')!
 
-    if (i < linesWrappedAroundSquare) {
-      text.x = squareTotalWidth
-    }
+  const r = (CONFIG.paperColor >> 16) & 0xff
+  const g = (CONFIG.paperColor >> 8) & 0xff
+  const b = CONFIG.paperColor & 0xff
 
-    textContainer.addChild(text)
-    yOffset += lineHeightPx
+  const imageData = ctx.createImageData(width, height)
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 15
+    imageData.data[i] = Math.min(255, Math.max(0, r + noise))
+    imageData.data[i + 1] = Math.min(255, Math.max(0, g + noise))
+    imageData.data[i + 2] = Math.min(255, Math.max(0, b + noise))
+    imageData.data[i + 3] = 255
   }
+  ctx.putImageData(imageData, 0, 0)
 
-  const renderTexture = RenderTexture.create({
-    width: CONFIG.width,
-    height: height,
-  })
-
-  app.renderer.render({
-    container: mainContainer,
-    target: renderTexture,
-  })
-
-  return renderTexture
+  return canvas
 }
 
-interface CapoletteraAppProps {
-  code: string
-  textureIndex: number
+interface ThreeSceneState {
+  renderer: WebGLRenderer
+  scene: Scene
+  camera: OrthographicCamera
+  material: ShaderMaterial
+  mesh: Mesh
+  animationId: number
 }
 
-function CapoletteraApp({ code, textureIndex }: CapoletteraAppProps) {
+function CapoletteraCanvas({ code, textureIndex }: { code: string; textureIndex: number }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const stateRef = useRef<ThreeSceneState | null>(null)
+  const [illuminatedImage, setIlluminatedImage] = useState<HTMLImageElement | null>(null)
+
   const height = calculateHeight(code)
 
+  useEffect(() => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      setIlluminatedImage(img)
+    }
+    img.src = textureUrls[textureIndex]
+  }, [textureIndex])
+
+  useEffect(() => {
+    if (!containerRef.current) {
+      return
+    }
+
+    const renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+    renderer.setSize(CONFIG.width, height)
+    renderer.setPixelRatio(1)
+    containerRef.current.appendChild(renderer.domElement)
+
+    const scene = new Scene()
+
+    const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10)
+    camera.position.z = 1
+
+    const textCanvas = createTextCanvas(code, CONFIG.width, height, illuminatedImage)
+    const textTexture = new CanvasTexture(textCanvas)
+    textTexture.minFilter = LinearFilter
+    textTexture.magFilter = LinearFilter
+
+    const paperCanvas = createPaperCanvas(CONFIG.width, height)
+    const paperTexture = new CanvasTexture(paperCanvas)
+    paperTexture.minFilter = LinearFilter
+    paperTexture.magFilter = LinearFilter
+
+    const material = new ShaderMaterial({
+      uniforms: {
+        uTexture: { value: textTexture },
+        uPaperTexture: { value: paperTexture },
+        uTime: { value: 0 },
+        uResolution: { value: new Vector2(CONFIG.width, height) },
+        uInkBleed: { value: 0.5 },
+        uNoiseStrength: { value: 0.02 },
+        uDistortion: { value: 0.15 },
+      },
+      vertexShader: inkBleedVertexShader,
+      fragmentShader: inkBleedFragmentShader,
+    })
+
+    const geometry = new PlaneGeometry(2, 2)
+    const mesh = new Mesh(geometry, material)
+    scene.add(mesh)
+
+    let time = 0
+    let animationId = 0
+
+    function animate() {
+      animationId = requestAnimationFrame(animate)
+      time += 0.01
+      material.uniforms.uTime.value = time
+      renderer.render(scene, camera)
+    }
+
+    animate()
+
+    stateRef.current = { renderer, scene, camera, material, mesh, animationId }
+
+    return () => {
+      cancelAnimationFrame(animationId)
+      renderer.dispose()
+      geometry.dispose()
+      material.dispose()
+      textTexture.dispose()
+      paperTexture.dispose()
+      if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
+        containerRef.current.removeChild(renderer.domElement)
+      }
+    }
+  }, [code, height, illuminatedImage])
+
+  useEffect(() => {
+    const state = stateRef.current
+    if (!state) {
+      return
+    }
+
+    state.renderer.setSize(CONFIG.width, height)
+    state.material.uniforms.uResolution.value.set(CONFIG.width, height)
+
+    const textCanvas = createTextCanvas(code, CONFIG.width, height, illuminatedImage)
+    const textTexture = new CanvasTexture(textCanvas)
+    textTexture.minFilter = LinearFilter
+    textTexture.magFilter = LinearFilter
+
+    state.material.uniforms.uTexture.value.dispose()
+    state.material.uniforms.uTexture.value = textTexture
+  }, [code, height, illuminatedImage])
+
   return (
-    <Application
-      width={CONFIG.width}
-      height={height}
-      backgroundColor={CONFIG.paperColor}
-      antialias
-      resolution={2}
-      autoDensity
-    >
-      <CapoletteraScene code={code} textureIndex={textureIndex} height={height} />
-    </Application>
+    <div
+      ref={containerRef}
+      style={{
+        width: CONFIG.width,
+        height: height,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+      }}
+    />
   )
 }
 
@@ -230,7 +260,7 @@ export function App() {
   const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newCode = e.target.value
     setCode(newCode)
-    
+
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
@@ -295,7 +325,7 @@ export function App() {
         </div>
       </div>
       <div id="canvas-container">
-        <CapoletteraApp code={renderCode} textureIndex={textureIndex} />
+        <CapoletteraCanvas code={renderCode} textureIndex={textureIndex} />
       </div>
     </div>
   )
