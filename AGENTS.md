@@ -1,10 +1,11 @@
+<!-- This AGENTS.md file is generated. Look for an agents.md package.json script to see what files to update instead. -->
 
+## pixi react
 
 read this repo files to see how to use pixi react 
 
 https://github.com/pixijs/pixi-react
 
-pixi layout: 
 https://github.com/pixijs/pixi-layout
 
 
@@ -21,11 +22,94 @@ import { Container, Graphics, Text } from 'pixi.js'
 
 
 
-
 // Extend @pixi/react with PIXI components
 extend({ Container, Graphics, Text, LayoutContainer })
 
 ```
+
+## pixi solid
+
+see https://github.com/sammccord/solid-pixi
+
+# github
+
+
+you can use the `gh` cli to do operations on github for the current repository. For example: open issues, open PRs, check actions status, read workflow logs, etc.
+
+## creating issues and pull requests
+
+when opening issues and pull requests with gh cli, never use markdown headings or sections. instead just use simple paragraphs, lists and code examples. be as short as possible while remaining clear and using good English.
+
+example:
+
+```bash
+gh issue create --title "Fix login timeout" --body "The login form times out after 5 seconds on slow connections. This affects users on mobile networks.
+
+Steps to reproduce:
+1. Open login page on 3G connection
+2. Enter credentials
+3. Click submit
+
+Expected: Login completes within 30 seconds
+Actual: Request times out after 5 seconds
+
+Error in console:
+\`\`\`bash
+Error: Request timeout at /api/auth/login
+\`\`\`"
+```
+
+## get current github repo
+
+`git config --get remote.origin.url`
+
+## checking status of latest github actions workflow run
+
+```bash
+gh run list # lists latest actions runs
+gh run watch <id> --exit-status # if workflow is in progress, wait for the run to complete. the actions run is finished when this command exits. Set a tiemout of at least 10 minutes when running this command
+gh pr checks --watch --fail-fast # watch for current branch pr ci checks to finish
+gh run view <id> --log-failed | tail -n 300 # read the logs for failed steps in the actions run
+gh run view <id> --log | tail -n 300 # read all logs for a github actions run
+```
+
+## responding to PR reviews and comments (gh-pr-review extension)
+
+```bash
+# view reviews and get thread IDs
+gh pr-review review view 42 -R owner/repo --unresolved
+
+# reply to a review comment
+gh pr-review comments reply 42 -R owner/repo \
+  --thread-id PRRT_kwDOAAABbcdEFG12 \
+  --body "Fixed in latest commit"
+
+# resolve a thread
+gh pr-review threads resolve 42 -R owner/repo --thread-id PRRT_kwDOAAABbcdEFG12
+```
+
+## reading github repos source code
+
+```sh
+opensrc zod # npm package name
+
+# Using github: prefix
+opensrc github:owner/repo
+
+# Using owner/repo shorthand
+opensrc facebook/react
+
+# Using full GitHub URL
+opensrc https://github.com/colinhacks/zod
+
+# Fetch a specific branch or tag
+opensrc owner/repo@v1.0.0
+opensrc owner/repo#main
+
+# Mix packages and repos
+```
+
+This will download the source code in ./opensrc. which should be put in .gitignore
 
 
 Use tmux to run long-lived background commands as background “tasks” like vite dev servers, commands with watch mode.  
@@ -46,6 +130,8 @@ List all background tasks (sessions):
 ```bash
 tmux ls
 ```
+
+You can assume sessions that do not have names were not started by you or agents so you can ignore them
 
 Kill a background task:
 
@@ -88,23 +174,23 @@ Example pattern for a coding agent:
    tmux kill-session -t build
    ```
 
-
 # core guidelines
 
 when summarizing changes at the end of the message, be super short, a few words and in bullet points, use bold text to highlight important keywords. use markdown.
 
 please ask questions and confirm assumptions before generating complex architecture code.
 
-NEVER run commands with & at the end to run them in the background. this is leaky and harmful! instead ask me to run commands in the background if needed.
+NEVER run commands with & at the end to run them in the background. this is leaky and harmful! instead ask me to run commands in the background using tmux if needed.
 
 NEVER commit yourself unless asked to do so. I will commit the code myself.
 
-NEVER add comments unless I tell you
+NEVER use git to revert files to previous state if you did not create those files yourself! there can be user changes in files you touched, if you revert those changes the user will be very upset!
 
 ## files
 
 always use kebab case for new filenames. never use uppercase letters in filenames
 
+never write temporary files to /tmp. instead write them to a local ./tmp folder instead. make sure it is in .gitignore too
 
 ## see files in the repo
 
@@ -123,6 +209,7 @@ you can open files when i ask me "open in zed the line where ..." using the comm
 # typescript
 
 - ALWAYS use normal imports instead of dynamic imports, unless there is an issue with es module only packages and you are in a commonjs package (this is rare).
+- when throwing errors always use clause instead of error inside message: `new Error("wrapping error", { cause: e })` instead of `new Error(\`wrapping error ${e}\`)`
 
 - use a single object argument instead of multiple positional args: use object arguments for new typescript functions if the function would accept more than one argument, so it is more readable, ({a,b,c}) instead of (a,b,c). this way you can use the object as a sort of named argument feature, where order of arguments does not matter and it's easier to discover parameters.
 
@@ -146,8 +233,6 @@ you can open files when i ask me "open in zed the line where ..." using the comm
 
 - NEVER do `(x as any).field` or `'field' in x` before checking if the code compiles first without it. the code probably doesn't need any or the in check. even if it does not compile, use think tool first! before adding (x as any).something, ALWAYS read the .d.ts to understand the types
 
-- after any change to typescript code ALWAYS run the `pnpm typecheck` script of that package, or if there is no typecheck script run `pnpm tsc` yourself
-
 - do not declare uninitialized variables that are defined later in the flow. instead use an IIFE with returns. this way there is less state. also define the type of the variable before the iife. here is an example:
 
 - use || over in: avoid 'x' in obj checks. prefer doing `obj?.x || ''` over doing `'x' in obj ? obj.x : ''`. only use the in operator if that field causes problems in typescript checks because typescript thinks the field is missing, as a last resort.
@@ -162,6 +247,7 @@ you can open files when i ask me "open in zed the line where ..." using the comm
 
 - if you encounter typescript lint errors for an npm package, read the node_modules/package/\*.d.ts files to understand the typescript types of the package. if you cannot understand them, ask me to help you with it.
 
+- NEVER silently suppress errors in catch {} blocks if they contain more than one function call
 ```ts
 // BAD. DO NOT DO THIS
 let favicon: string | undefined;
@@ -221,6 +307,8 @@ remember to always add the explicit type to avoid unexpected type inference.
 
 DO `import fs from 'fs'; fs.writeFileSync(...)`
 DO NOT `import { writeFileSync } from 'fs';`
+
+- NEVER pass a string to abortController.abort(). instead if you want to pass a reason always pass an Error instance. like `controller.abort(new Error('reason'))`. This way catch blocks receive an Error instance and not something else.
 
 # package manager: pnpm with workspace
 
@@ -357,7 +445,7 @@ if after doing this we still have duplicate packages, you will have to ask the u
 
 - too many `useState` calls are bad. if some piece of state is dependent on other state just compute it as an expression in render. do not add new state unless strictly necessary. before adding a new useState to a component, use @think tool to think hard if you can instead: use expression with already existing local state, use expression with some global state, use expression with loader data, use expression with some other existing variable instead. for example if you need to show a popover when there is an error you should use the error as open state for the popover instead of adding new useState hook
 
-- `useCallback` is bad. it should be always avoided.
+- `useCallback` is bad. it should be always avoided unless for ref props. ref props ALWAYS need to be passed memoized functions or the component could remount on ever render!
 
 - NEVER pass functions to useEffect or useMemo dependencies. when you start passing functions to hook dependencies you need to add useCallback everywhere in the code, useCallback is a virus that infects the codebase and should be ALWAYS avoided.
 
@@ -387,36 +475,48 @@ if after doing this we still have duplicate packages, you will have to ask the u
 
 zustand is the preferred way to created global React state. put it in files like state.ts or x-state.ts where x is something that describe a portion of app state in case of multiple global states or multiple apps
 
-- minimize number of props. do not use props if you can use zustand state instead. the app has global zustand state that lets you get a piece of state down from the component tree by using something like `useStore(x => x.something)` or `useLoaderData<typeof loader>()` or even useRouteLoaderData if you are deep in the react component tree
-
-- do not consider local state truthful when interacting with server. when interacting with the server with rpc or api calls never use state from the render function as input for the api call. this state can easily become stale or not get updated in the closure context. instead prefer using zustand `useStore.getState().stateValue`. notice that useLoaderData or useParams should be fine in this case.
-
 - NEVER add zustand state setter methods. instead use useStore.setState to set state. For example never add a method `setVariable` in the state type. Instead call `setState` directly
 
 - zustand already merges new partial state with the previous state. NEVER DO `useStore.setState({ ...useStore.getInitialState(), ... })` unless for resetting state
 
+## non controlled input components
+
+some components do not have a value prop to set the value via React state. these are called uncontrolled components. Instead they usually let you get the current input value via ref. something like ref.current.value. They usually also have an onChange prop that let you know when the value changes
+
+these usually have a initialValue or defaultValue to programmatically set the initial value of the input
+
+when using these components you SHOULD not track their state via React: instead you should programmatically set their value and read their value via refs in event handlers
+
+tracking uncontrolled inputs via React state means that you will need to add useEffect to programmatically change their value when our state changes. this is an anti pattern. instead you MUST keep in mind the uncontrolled input manages its own state and we interface with it via refs and initialValue prop. 
+
+using React state in these cases is only necessary if you have to show the input value during render. if that is not the case you can just use `inputRef.current.value` instead and set the value via `inputRef.current.value = something`
+
 # testing
 
-do not write new test files unless asked. do not write tests if there is not already a test or describe block for that function or module.
+.toMatchInlineSnapshot is the preferred way to write tests. leave them empty the first time, update them with -u. check git diff for the test file every time you update them with -u
+
+never use timeouts longer than 5 seconds for expects and other statements timeouts. increase timeouts for tests if required, up to 1 minute
+
+do not create dumb tests that test nothing. do not write tests if there is not already a test file or describe block for that function or module.
 
 if the inputs for the tests is an array of repetitive fields and long content, generate this input data programmatically instead of hardcoding everything. only hardcode the important parts and generate other repetitive fields in a .map or .reduce
 
 tests should validate complex and non-obvious logic. if a test looks like a placeholder, do not add it.
 
-use vitest to run tests. tests should be run from the current package directory and not root. try using the test script instead of vitest directly. additional vitest flags can be added at the end, like --run to disable watch mode or -u to update snapshots.
+use vitest or bun test to run tests. tests should be run from the current package directory and not root. try using the test script instead of vitest directly. additional vitest flags can be added at the end, like --run to disable watch mode or -u to update snapshots.
 
 to understand how the code you are writing works, you should add inline snapshots in the test files with expect().toMatchInlineSnapshot(), then run the test with `pnpm test -u --run` or `pnpm vitest -u --run` to update the snapshot in the file, then read the file again to inspect the result. if the result is not expected, update the code and repeat until the snapshot matches your expectations. never write the inline snapshots in test files yourself. just leave them empty and run `pnpm test -u --run` to update them.
 
 > always call `pnpm vitest` or `pnpm test` with `--run` or they will hang forever waiting for changes!
 > ALWAYS read back the test if you use the `-u` option to make sure the inline snapshots are as you expect.
 
-- NEVER writes the snapshots content yourself in `toMatchInlineSnapshot`. instead leave it empty and call `pnpm test -u` to fill in snapshots content.
+- NEVER write the snapshots content yourself in `toMatchInlineSnapshot`. instead leave it as is and call `pnpm test -u` to fill in snapshots content. the first time you call `toMatchInlineSnapshot()` you can leave it empty
 
 - when updating implementation and `toMatchInlineSnapshot` should change, DO NOT remove the inline snapshots yourself, just run `pnpm test -u` instead! This will replace contents of the snapshots without wasting time doing it yourself.
 
 - for very long snapshots you should use `toMatchFileSnapshot(filename)` instead of `toMatchInlineSnapshot()`. put the snapshot files in a snapshots/ directory and use the appropriate extension for the file based on the content
 
-never test client react components. only server code that runs on the server.
+never test client react components. only React and browser independent code. 
 
 most tests should be simple calls to functions with some expect calls, no mocks. test files should be called the same as the file where the tested function is being exported from.
 
@@ -432,7 +532,58 @@ sometimes tests work directly on database data, using prisma. to run these tests
 
 never write tests yourself that call prisma or interact with database or emails. for these, ask the user to write them for you.
 
-changelogs.md
+# changesets
+
+After completing a fix or feature for a **public package** (has `version` in package.json, not `private: true`), add a changeset file in `.changeset/` at the repo root. Never edit CHANGELOG.md directly; it is generated automatically at publish time when changesets are consumed.
+
+Never run the `changeset` CLI command interactively. Always create the file manually.
+
+Create a `.md` file with a random kebab-case name (e.g. `cool-lions-dance.md`):
+
+```md
+---
+'package-name': patch
+---
+
+Description of what changed, with code examples if applicable.
+```
+
+Multiple packages can be listed in one changeset:
+
+```md
+---
+'spiceflow': minor
+'create-spiceflow': patch
+---
+
+Add federation support for remote RSC components.
+```
+
+## rules
+
+- **Never use `major`.** Use `patch` for fixes and `minor` for new features.
+- **Never edit CHANGELOG.md directly.** It is generated from changesets at publish time.
+- **Never bump `package.json` version manually.** Versions are bumped automatically.
+- **Never run the changeset CLI.** Write the `.md` file yourself.
+- **Only public packages.** Skip changesets for packages marked `private: true` or without a `version` field.
+- **Present tense.** Write "add support for X", "fix bug with Y".
+- **One changeset per logical change.** Two unrelated changes get two files.
+
+## rich content
+
+Changeset descriptions become the public changelog. Write them as rich content aimed at end users:
+
+- Code examples showing new APIs or changed behavior
+- Migration steps if the user needs to update their code
+- Diagrams explaining architecture changes
+- Before/after comparisons
+
+## private packages
+
+For **private packages** (`private: true`, no version), skip changesets entirely. These do not get published.
+
+Load the `changesets` skill for full workflow details.
+
 # writing docs
 
 when generating a .md or .mdx file to document things, always add a frontmatter with title and description. also add a prompt field with the exact prompt used to generate the doc. use @ to reference files and urls and provide any context necessary to be able to recreate this file from scratch using a model. if you used urls also reference them. reference all files you had to read to create the doc. use yaml | syntax to add this prompt and never go over the column width of 80
@@ -462,3 +613,4 @@ const jsonSchema = toJSONSchema(mySchema, {
   removeAdditionalStrategy: "strict",
 });
 ```
+
